@@ -66,4 +66,6 @@ urlpatterns = [
         views.DeleteFollowView.as_view(),
         name="delete_follow",
     ),
+    # list notifications
+    path("notifications/", views.ListNotification.as_view(), name="list_notification"),
 ]

@@ -1,71 +1,53 @@
 from django.shortcuts import render
-from .serializers import (
-    ListCreateUserSerializer,
-    UpdateUserSerializer,
-    UpdateProfileSerializer,
-    CreatePostSerializer,
-    UpdateDeletePostSerializer,
-    ListPostSerializer,
-    CreateCommentSerializer,
-    UpdateDeleteCommentSerializer,
-    ListCommentSerializer,
-    ListCreateDeleteLikeSerializer,
-    ListCreateFollowSerializer,
-    DeleteFollowSerializer,
-)
-from rest_framework.generics import (
-    CreateAPIView,
-    RetrieveUpdateAPIView,
-    RetrieveUpdateDestroyAPIView,
-    ListAPIView,
-    ListCreateAPIView,
-    UpdateAPIView,
-    DestroyAPIView,
-)
+from . import serializers
+from rest_framework import generics
 from .models import CustomUser, Profile, Post, Comment, Like, Follow, Notification
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 
 # USER RELATED VIEWS
-class ListCreateUserView(ListCreateAPIView):
+class ListCreateUserView(generics.ListCreateAPIView):
     queryset = CustomUser.objects.all()
-    serializer_class = ListCreateUserSerializer
+    serializer_class = serializers.ListCreateUserSerializer
 
     def perform_create(self, serializer):
         user = serializer.save()
         Profile.objects.create(user=user)
 
 
-class RetrieveUpdateUserView(RetrieveUpdateAPIView):
+class RetrieveUpdateUserView(generics.RetrieveUpdateAPIView):
     queryset = CustomUser.objects.all()
-    serializer_class = UpdateUserSerializer
+    serializer_class = serializers.UpdateUserSerializer
     lookup_field = "pk"
 
 
 # PROFILE RELATED VIEWS
-class RetrieveUpdateProfileView(RetrieveUpdateAPIView):
+class RetrieveUpdateProfileView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
-    serializer_class = UpdateProfileSerializer
+    serializer_class = serializers.UpdateProfileSerializer
     lookup_field = "pk"
 
 
 # POST RELATED VIEWS
-class ListPostView(ListAPIView):
+class ListPostView(generics.ListAPIView):
     queryset = Post.objects.all()
-    serializer_class = ListPostSerializer
+    serializer_class = serializers.ListPostSerializer
+    
+    # def get_queryset(self):
+      
 
 
-class CreatePostView(CreateAPIView):
+class CreatePostView(generics.CreateAPIView):
     queryset = Post.objects.all()
-    serializer_class = CreatePostSerializer
+    serializer_class = serializers.CreatePostSerializer
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
 
-class RetrieveUpdateDeletePostView(RetrieveUpdateDestroyAPIView):
+class RetrieveUpdateDeletePostView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Post.objects.all()
-    serializer_class = UpdateDeletePostSerializer
+    serializer_class = serializers.UpdateDeletePostSerializer
     lookup_field = "pk"
 
     def perform_destroy(self, instance):
@@ -80,16 +62,16 @@ class RetrieveUpdateDeletePostView(RetrieveUpdateDestroyAPIView):
 
 
 # COMMENT RELATED VIEWS
-class ListCommentView(ListAPIView):
-    serializer_class = ListCommentSerializer
+class ListCommentView(generics.ListAPIView):
+    serializer_class = serializers.ListCommentSerializer
 
     def get_queryset(self):
         post_id = self.kwargs.get("post_id")
         return Comment.objects.filter(post__id=post_id)
 
 
-class CreateCommentView(ListCreateAPIView):
-    serializer_class = CreateCommentSerializer
+class CreateCommentView(generics.ListCreateAPIView):
+    serializer_class = serializers.CreateCommentSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -99,15 +81,15 @@ class CreateCommentView(ListCreateAPIView):
         serializer.save(author=self.request.user)
 
 
-class UpdateCommentView(UpdateAPIView):
+class UpdateCommentView(generics.UpdateAPIView):
     queryset = Comment.objects.all()
-    serializer_class = UpdateDeleteCommentSerializer
+    serializer_class = serializers.UpdateDeleteCommentSerializer
     lookup_field = "pk"
 
 
-class DeleteCommentView(DestroyAPIView):
+class DeleteCommentView(generics.DestroyAPIView):
     queryset = Comment.objects.all()
-    serializer_class = UpdateDeleteCommentSerializer
+    serializer_class = serializers.UpdateDeleteCommentSerializer
     lookup_field = "pk"
 
     def perform_destroy(self, instance):
@@ -122,8 +104,8 @@ class DeleteCommentView(DestroyAPIView):
 
 
 # LIKE RELATED VIEWS
-class ListCreateLikeView(ListCreateAPIView):
-    serializer_class = ListCreateDeleteLikeSerializer
+class ListCreateLikeView(generics.ListCreateAPIView):
+    serializer_class = serializers.ListCreateDeleteLikeSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -135,9 +117,9 @@ class ListCreateLikeView(ListCreateAPIView):
         serializer.save(user=self.request.user, post=post)
 
 
-class DeleteLikeView(DestroyAPIView):
+class DeleteLikeView(generics.DestroyAPIView):
     queryset = Post.objects.all()
-    serializer_class = ListCreateDeleteLikeSerializer
+    serializer_class = serializers.ListCreateDeleteLikeSerializer
     lookup_field = "pk"
 
     def perform_destroy(self, instance):
@@ -153,16 +135,16 @@ class DeleteLikeView(DestroyAPIView):
 
 
 # FOLLOW RELATED VIEWS
-class ListFollowerView(ListAPIView):
-    serializer_class = ListCreateFollowSerializer
+class ListFollowerView(generics.ListAPIView):
+    serializer_class = serializers.ListCreateFollowSerializer
 
     def get_queryset(self):
         user = self.request.user
         return user.followers.all()
 
 
-class ListCreateFollowView(ListCreateAPIView):
-    serializer_class = ListCreateFollowSerializer
+class ListCreateFollowView(generics.ListCreateAPIView):
+    serializer_class = serializers.ListCreateFollowSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -177,9 +159,9 @@ class ListCreateFollowView(ListCreateAPIView):
             serializer.save(follower=self.request.user, following=following)
 
 
-class DeleteFollowView(DestroyAPIView):
+class DeleteFollowView(generics.DestroyAPIView):
     queryset = CustomUser.objects.all()
-    serializer_class = DeleteFollowSerializer
+    serializer_class = serializers.DeleteFollowSerializer
     lookup_field = "pk"
 
     def perform_destroy(self, instance):
@@ -192,3 +174,14 @@ class DeleteFollowView(DestroyAPIView):
             raise PermissionDenied(
                 {"detail": "You are not authorized to perform this unfollow action."}
             )
+
+
+# NOTIFICATIONS RELATED VIEWS
+class ListNotification(generics.ListAPIView):
+  queryset = Notification.objects.all() 
+  serializer_class = serializers.ListNotificationSerializer
+  
+  def get_queryset(self):
+    user = self.request.user
+    following_users = Follow.objects.filter(follower=user).values_list('following', flat=True)
+    return Notification.objects.filter(sender__in=following_users)

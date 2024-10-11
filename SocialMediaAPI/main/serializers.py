@@ -142,3 +142,10 @@ class DeleteFollowSerializer(serializers.ModelSerializer):
     class Meta:
         model = Follow
         fields = "__all__"
+
+
+# NOTIFICATIONS RELATED SERIALIZERS
+class ListNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = "__all__"
