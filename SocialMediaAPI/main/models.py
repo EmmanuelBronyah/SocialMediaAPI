@@ -59,7 +59,7 @@ class Post(models.Model):
     media = models.FileField(upload_to="media/", blank=True, null=True)
 
     def __str__(self):
-        return f"{self.author.username} - {self.content[:30]}"
+        return f"Post by {self.author.username} | Content: {self.content[:30]}..."
 
 
 class Comment(models.Model):

@@ -3,12 +3,36 @@ from . import serializers
 from rest_framework import generics
 from .models import CustomUser, Profile, Post, Comment, Like, Follow, Notification
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime, time as dt_time
+from rest_framework.pagination import PageNumberPagination
+from .posts_comments_functions import *
+
+
+class CustomPagination(PageNumberPagination):
+    page_size = 10
+    page_query_param = "page_size"
+    max_page_size = 10
+
+    def get_paginated_response(self, data):
+        return Response(
+            {
+                "links": {
+                    "next": self.get_next_link(),
+                    "previous": self.get_previous_link(),
+                },
+                "count": self.page.paginator.count,
+                "results": data,
+            }
+        )
 
 
 # USER RELATED VIEWS
 class ListCreateUserView(generics.ListCreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = serializers.ListCreateUserSerializer
+    pagination_class = CustomPagination
 
     def perform_create(self, serializer):
         user = serializer.save()
@@ -32,9 +56,45 @@ class RetrieveUpdateProfileView(generics.RetrieveUpdateAPIView):
 class ListPostView(generics.ListAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.ListPostSerializer
-    
-    # def get_queryset(self):
-      
+    pagination_class = CustomPagination
+
+    def get_posts(self):
+        user = self.request.user
+        following_users = Follow.objects.filter(follower=user).values_list(
+            "following", flat=True
+        )
+        posts = Post.objects.filter(author__in=following_users).order_by(
+            "-timestamp"
+        ) | Post.objects.filter(author=user).order_by("-timestamp")
+        return posts
+
+    def get_queryset(self):
+        sort_by = self.request.query_params.get("sort_by")
+        if sort_by is None:
+            posts = self.get_posts()
+            return posts
+
+        match sort_by:
+            case "likes":
+                posts = self.get_posts()
+                post_with_likes = list(map(get_post_likes, posts))
+                sorted_post_with_likes = sorted(
+                    post_with_likes,
+                    key=lambda post_data: post_data["total_likes"],
+                    reverse=True,
+                )
+                posts = list(map(get_sorted_posts, sorted_post_with_likes))
+                return posts
+            case "comments":
+                posts = self.get_posts()
+                post_with_comments = list(map(get_post_comments, posts))
+                sorted_post_with_comments = sorted(
+                    post_with_comments,
+                    key=lambda post_data: post_data["total_comments"],
+                    reverse=True,
+                )
+                posts = list(map(get_sorted_posts, sorted_post_with_comments))
+                return posts
 
 
 class CreatePostView(generics.CreateAPIView):
@@ -43,6 +103,29 @@ class CreatePostView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+
+class SearchPostView(generics.ListAPIView):
+    queryset = Post.objects.all()
+    serializer_class = serializers.ListPostSerializer
+
+    def get_queryset(self):
+        queryset = Post.objects.all()
+
+        date = self.request.query_params.get("date")
+        time = self.request.query_params.get("time")
+        keyword = self.request.query_params.get("keyword")
+
+        if date:
+            queryset = queryset.filter(timestamp__date=date)
+            return queryset
+        if keyword:
+            queryset = queryset.filter(content__icontains=keyword)
+            return queryset
+        if time:
+            hour, minute = time.split(":")
+            queryset = queryset.filter(timestamp__time=dt_time(int(hour), int(minute)))
+            return queryset
 
 
 class RetrieveUpdateDeletePostView(generics.RetrieveUpdateDestroyAPIView):
@@ -64,6 +147,7 @@ class RetrieveUpdateDeletePostView(generics.RetrieveUpdateDestroyAPIView):
 # COMMENT RELATED VIEWS
 class ListCommentView(generics.ListAPIView):
     serializer_class = serializers.ListCommentSerializer
+    pagination_class = CustomPagination
 
     def get_queryset(self):
         post_id = self.kwargs.get("post_id")
@@ -106,6 +190,7 @@ class DeleteCommentView(generics.DestroyAPIView):
 # LIKE RELATED VIEWS
 class ListCreateLikeView(generics.ListCreateAPIView):
     serializer_class = serializers.ListCreateDeleteLikeSerializer
+    pagination_class = CustomPagination
 
     def get_queryset(self):
         user = self.request.user
@@ -137,6 +222,7 @@ class DeleteLikeView(generics.DestroyAPIView):
 # FOLLOW RELATED VIEWS
 class ListFollowerView(generics.ListAPIView):
     serializer_class = serializers.ListCreateFollowSerializer
+    pagination_class = CustomPagination
 
     def get_queryset(self):
         user = self.request.user
@@ -145,6 +231,7 @@ class ListFollowerView(generics.ListAPIView):
 
 class ListCreateFollowView(generics.ListCreateAPIView):
     serializer_class = serializers.ListCreateFollowSerializer
+    pagination_class = CustomPagination
 
     def get_queryset(self):
         user = self.request.user
@@ -178,10 +265,14 @@ class DeleteFollowView(generics.DestroyAPIView):
 
 # NOTIFICATIONS RELATED VIEWS
 class ListNotification(generics.ListAPIView):
-  queryset = Notification.objects.all() 
-  serializer_class = serializers.ListNotificationSerializer
-  
-  def get_queryset(self):
-    user = self.request.user
-    following_users = Follow.objects.filter(follower=user).values_list('following', flat=True)
-    return Notification.objects.filter(sender__in=following_users)
+    queryset = Notification.objects.all()
+    serializer_class = serializers.ListNotificationSerializer
+    pagination_class = CustomPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        following_users = Follow.objects.filter(follower=user).values_list(
+            "following", flat=True
+        )
+        notifications = Notification.objects.filter(sender__in=following_users)
+        return notifications

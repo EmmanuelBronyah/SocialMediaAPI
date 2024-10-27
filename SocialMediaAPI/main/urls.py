@@ -25,6 +25,7 @@ urlpatterns = [
     # retrieve, create, update, or delete a post
     path("posts/", views.ListPostView.as_view(), name="list_post"),
     path("create-post/", views.CreatePostView.as_view(), name="create_post"),
+    path("search-post/", views.SearchPostView.as_view(), name="search-post"),
     path(
         "post/<int:pk>/",
         views.RetrieveUpdateDeletePostView.as_view(),
