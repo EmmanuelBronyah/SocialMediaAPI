@@ -8,6 +8,8 @@ from rest_framework import status
 from datetime import datetime, time as dt_time
 from rest_framework.pagination import PageNumberPagination
 from .posts_comments_functions import *
+from rest_framework import permissions
+from django.core.exceptions import ValidationError as django_validation_error
 
 
 class CustomPagination(PageNumberPagination):
@@ -33,6 +35,7 @@ class ListCreateUserView(generics.ListCreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = serializers.ListCreateUserSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
         user = serializer.save()
@@ -43,6 +46,7 @@ class RetrieveUpdateUserView(generics.RetrieveUpdateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = serializers.UpdateUserSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
 # PROFILE RELATED VIEWS
@@ -50,6 +54,7 @@ class RetrieveUpdateProfileView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
     serializer_class = serializers.UpdateProfileSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
 # POST RELATED VIEWS
@@ -57,6 +62,7 @@ class ListPostView(generics.ListAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.ListPostSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_posts(self):
         user = self.request.user
@@ -100,6 +106,7 @@ class ListPostView(generics.ListAPIView):
 class CreatePostView(generics.CreateAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.CreatePostSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -108,6 +115,7 @@ class CreatePostView(generics.CreateAPIView):
 class SearchPostView(generics.ListAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.ListPostSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         queryset = Post.objects.all()
@@ -116,22 +124,29 @@ class SearchPostView(generics.ListAPIView):
         time = self.request.query_params.get("time")
         keyword = self.request.query_params.get("keyword")
 
-        if date:
-            queryset = queryset.filter(timestamp__date=date)
-            return queryset
-        if keyword:
-            queryset = queryset.filter(content__icontains=keyword)
-            return queryset
-        if time:
-            hour, minute = time.split(":")
-            queryset = queryset.filter(timestamp__time=dt_time(int(hour), int(minute)))
-            return queryset
+        try:
+            if date:
+                queryset = queryset.filter(timestamp__date=date)
+                return queryset
+            if keyword:
+                queryset = queryset.filter(content__icontains=keyword)
+                return queryset
+            if time:
+                try:
+                    hour, minute = time.split(":") 
+                    queryset = queryset.filter(timestamp__time=dt_time(int(hour), int(minute)))
+                    return queryset
+                except ValueError as e:
+                    raise ValidationError({"detail": "Invalid time format."})
+        except django_validation_error as e:
+            raise ValidationError({"detail": str(e)})
 
 
 class RetrieveUpdateDeletePostView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.UpdateDeletePostSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def perform_destroy(self, instance):
         post_owner = instance.author
@@ -148,6 +163,7 @@ class RetrieveUpdateDeletePostView(generics.RetrieveUpdateDestroyAPIView):
 class ListCommentView(generics.ListAPIView):
     serializer_class = serializers.ListCommentSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         post_id = self.kwargs.get("post_id")
@@ -156,6 +172,7 @@ class ListCommentView(generics.ListAPIView):
 
 class CreateCommentView(generics.ListCreateAPIView):
     serializer_class = serializers.CreateCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -169,12 +186,14 @@ class UpdateCommentView(generics.UpdateAPIView):
     queryset = Comment.objects.all()
     serializer_class = serializers.UpdateDeleteCommentSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class DeleteCommentView(generics.DestroyAPIView):
     queryset = Comment.objects.all()
     serializer_class = serializers.UpdateDeleteCommentSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_destroy(self, instance):
         comment_owner = instance.author
@@ -191,38 +210,51 @@ class DeleteCommentView(generics.DestroyAPIView):
 class ListCreateLikeView(generics.ListCreateAPIView):
     serializer_class = serializers.ListCreateDeleteLikeSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
         return user.likes.all()
 
     def perform_create(self, serializer):
-        post_id = self.kwargs.get("post_id")
-        post = Post.objects.get(id=post_id)
-        serializer.save(user=self.request.user, post=post)
+        try:
+            post_id = self.kwargs.get("post_id")
+            post = Post.objects.get(id=post_id)
+            like = Like.objects.get(user=self.request.user, post=post_id)
+            if like:
+                raise ValidationError({"detail": "You have already liked this post."})
+        except Like.DoesNotExist:
+            serializer.save(user=self.request.user, post=post)
+        except Post.DoesNotExist:
+            raise ValidationError({"detail": f"Post with id '{post_id}' does not exist."})
 
 
 class DeleteLikeView(generics.DestroyAPIView):
     queryset = Post.objects.all()
     serializer_class = serializers.ListCreateDeleteLikeSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_destroy(self, instance):
-        like = Like.objects.get(user=self.request.user, post=instance)
-        like_owner = like.user
-        authenticated_user = self.request.user
-        if like_owner == authenticated_user:
-            like.delete()
-        else:
-            raise PermissionDenied(
-                {"detail": "You are not authorized to unlike this post."}
-            )
+        try:
+            like = Like.objects.get(user=self.request.user, post=instance)
+            like_owner = like.user
+            authenticated_user = self.request.user
+            if like_owner == authenticated_user:
+                like.delete()
+            else:
+                raise PermissionDenied(
+                    {"detail": "You are not authorized to unlike this post."}
+                )
+        except Like.DoesNotExist:
+            raise ValidationError({"detail": "You have not liked this post."})
 
 
 # FOLLOW RELATED VIEWS
 class ListFollowerView(generics.ListAPIView):
     serializer_class = serializers.ListCreateFollowSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -232,6 +264,7 @@ class ListFollowerView(generics.ListAPIView):
 class ListCreateFollowView(generics.ListCreateAPIView):
     serializer_class = serializers.ListCreateFollowSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -250,17 +283,21 @@ class DeleteFollowView(generics.DestroyAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = serializers.DeleteFollowSerializer
     lookup_field = "pk"
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_destroy(self, instance):
-        follow = Follow.objects.get(follower=self.request.user, following=instance)
-        follow_owner = follow.follower
-        authenticated_user = self.request.user
-        if follow_owner == authenticated_user:
-            follow.delete()
-        else:
-            raise PermissionDenied(
-                {"detail": "You are not authorized to perform this unfollow action."}
-            )
+        try:
+            follow = Follow.objects.get(follower=self.request.user, following=instance)
+            follow_owner = follow.follower
+            authenticated_user = self.request.user
+            if follow_owner == authenticated_user:
+                follow.delete()
+            else:
+                raise PermissionDenied(
+                    {"detail": "You are not authorized to perform this unfollow action."}
+                )
+        except Follow.DoesNotExist:
+            raise ValidationError({"detail": "Cannot execute unfollow operation on a user you are not following."})
 
 
 # NOTIFICATIONS RELATED VIEWS
@@ -268,6 +305,7 @@ class ListNotification(generics.ListAPIView):
     queryset = Notification.objects.all()
     serializer_class = serializers.ListNotificationSerializer
     pagination_class = CustomPagination
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
