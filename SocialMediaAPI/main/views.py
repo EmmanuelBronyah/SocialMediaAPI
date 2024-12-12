@@ -133,8 +133,10 @@ class SearchPostView(generics.ListAPIView):
                 return queryset
             if time:
                 try:
-                    hour, minute = time.split(":") 
-                    queryset = queryset.filter(timestamp__time=dt_time(int(hour), int(minute)))
+                    hour, minute = time.split(":")
+                    queryset = queryset.filter(
+                        timestamp__time=dt_time(int(hour), int(minute))
+                    )
                     return queryset
                 except ValueError as e:
                     raise ValidationError({"detail": "Invalid time format."})
@@ -226,7 +228,9 @@ class ListCreateLikeView(generics.ListCreateAPIView):
         except Like.DoesNotExist:
             serializer.save(user=self.request.user, post=post)
         except Post.DoesNotExist:
-            raise ValidationError({"detail": f"Post with id '{post_id}' does not exist."})
+            raise ValidationError(
+                {"detail": f"Post with id '{post_id}' does not exist."}
+            )
 
 
 class DeleteLikeView(generics.DestroyAPIView):
@@ -294,10 +298,16 @@ class DeleteFollowView(generics.DestroyAPIView):
                 follow.delete()
             else:
                 raise PermissionDenied(
-                    {"detail": "You are not authorized to perform this unfollow action."}
+                    {
+                        "detail": "You are not authorized to perform this unfollow action."
+                    }
                 )
         except Follow.DoesNotExist:
-            raise ValidationError({"detail": "Cannot execute unfollow operation on a user you are not following."})
+            raise ValidationError(
+                {
+                    "detail": "Cannot execute unfollow operation on a user you are not following."
+                }
+            )
 
 
 # NOTIFICATIONS RELATED VIEWS
