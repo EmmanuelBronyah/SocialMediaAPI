@@ -88,7 +88,7 @@ DATABASES = {
         'NAME': 'SocialMediaAPI',
         'USER': 'postgres',
         'PASSWORD': os.getenv("DB_PASSWORD"),
-        'HOST': 'localhost',
+        'HOST': 'database-test1.cxiwu8uk85nv.us-east-1.rds.amazonaws.com',
         'PORT': '5432',
     }
 }
